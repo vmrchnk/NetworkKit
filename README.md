@@ -21,7 +21,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/your-username/NetworkKit.git", from: "1.0.0")
+    .package(url: "https://github.com/your-username/NetworkKit.git", from: "0.1.0")
 ]
 ```
 
@@ -74,10 +74,11 @@ struct SearchQuery: Encodable {
 }
 ```
 
-### 2. Create a Network Client
+### 2. Configure Network Client
 
 ```swift
-let client = NetworkClient(
+// At app startup (e.g., in AppDelegate or @main App)
+NetworkClient.shared = NetworkClient(
     configuration: NetworkClientConfiguration(
         baseURL: "https://api.example.com",
         defaultHeaders: ["Authorization": "Bearer \(token)"]
@@ -88,18 +89,14 @@ let client = NetworkClient(
 ### 3. Execute Requests
 
 ```swift
-// Async/await
-let user = try await client.execute(GetUser(userId: "123"))
+// Simple request
+let user = try await GetUser(userId: "123").execute()
 
 // With query
-let users = try await client.execute(
-    SearchUsers(query: .init(name: "John", limit: 10))
-)
+let users = try await SearchUsers(query: .init(name: "John", limit: 10)).execute()
 
 // With body
-let post = try await client.execute(
-    CreatePost(body: .init(title: "Hello", content: "World"))
-)
+let post = try await CreatePost(body: .init(title: "Hello", content: "World")).execute()
 ```
 
 ## Configuration
@@ -151,7 +148,7 @@ let client = NetworkClient(configuration: config, logger: SilentNetworkLogger())
 
 ```swift
 do {
-    let user = try await client.execute(GetUser(userId: "123"))
+    let user = try await GetUser(userId: "123").execute()
 } catch let error as NetworkError {
     switch error {
     case .unauthorized:
@@ -193,7 +190,7 @@ enum API {
 }
 
 // Usage
-let user = try await client.execute(API.Users.Get(id: "123"))
+let user = try await API.Users.Get(id: "123").execute()
 ```
 
 ## Requirements

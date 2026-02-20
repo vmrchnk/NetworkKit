@@ -24,6 +24,27 @@ public struct NetworkClientConfiguration: Sendable {
     }
 }
 
+// MARK: - Session Cache
+
+private actor SessionCache {
+    private var sessions: [String: URLSession] = [:]
+
+    func session(for provider: some SessionProvider, configuration: NetworkClientConfiguration) -> URLSession {
+        if let existing = sessions[provider.identifier] {
+            return existing
+        }
+
+        let sessionConfig = provider.makeConfiguration()
+        sessionConfig.timeoutIntervalForRequest = configuration.timeoutInterval
+        sessionConfig.timeoutIntervalForResource = configuration.resourceTimeout
+        sessionConfig.waitsForConnectivity = configuration.waitsForConnectivity
+
+        let session = URLSession(configuration: sessionConfig)
+        sessions[provider.identifier] = session
+        return session
+    }
+}
+
 // MARK: - Network Client
 
 public final class NetworkClient: Sendable {
@@ -33,7 +54,7 @@ public final class NetworkClient: Sendable {
     public static var shared: NetworkClient!
 
     private let configuration: NetworkClientConfiguration
-    private let session: URLSession
+    private let sessionCache: SessionCache
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     private let logger: NetworkLogging
@@ -45,12 +66,7 @@ public final class NetworkClient: Sendable {
         logger: NetworkLogging? = nil
     ) {
         self.configuration = configuration
-
-        let sessionConfig = URLSessionConfiguration.default
-        sessionConfig.timeoutIntervalForRequest = configuration.timeoutInterval
-        sessionConfig.timeoutIntervalForResource = configuration.resourceTimeout
-        sessionConfig.waitsForConnectivity = configuration.waitsForConnectivity
-        self.session = URLSession(configuration: sessionConfig)
+        self.sessionCache = SessionCache()
 
         self.decoder = decoder ?? {
             let d = JSONDecoder()
@@ -73,6 +89,7 @@ public final class NetworkClient: Sendable {
 
     public func execute<R: Request>(_ request: R) async throws -> R.Response {
         let urlRequest = try buildURLRequest(for: request)
+        let session = await sessionCache.session(for: request.session, configuration: configuration)
 
         logger.logRequest(urlRequest)
 

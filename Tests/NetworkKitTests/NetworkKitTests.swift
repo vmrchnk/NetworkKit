@@ -1,11 +1,14 @@
-import XCTest
+import Foundation
+import Testing
 @testable import NetworkKit
 
-final class NetworkKitTests: XCTestCase {
+// MARK: - Request Tests
 
-    // MARK: - Request Without Body
+@Suite("Request Tests")
+struct RequestTests {
 
-    func testRequestWithoutBody() {
+    @Test("Request without body has nil body")
+    func requestWithoutBody() {
         struct GetUser: Request {
             typealias Response = String
             var path: String { "/users/1" }
@@ -13,14 +16,13 @@ final class NetworkKitTests: XCTestCase {
         }
 
         let request = GetUser()
-        XCTAssertNil(request.body)
-        XCTAssertEqual(request.path, "/users/1")
-        XCTAssertEqual(request.method, .get)
+        #expect(request.body == nil)
+        #expect(request.path == "/users/1")
+        #expect(request.method == .get)
     }
 
-    // MARK: - Request With Body
-
-    func testRequestWithBody() {
+    @Test("Request with body contains body data")
+    func requestWithBody() {
         struct CreateUser: Request {
             struct Body: Encodable {
                 let name: String
@@ -34,15 +36,14 @@ final class NetworkKitTests: XCTestCase {
         }
 
         let request = CreateUser(body: .init(name: "John", email: "john@test.com"))
-        XCTAssertNotNil(request.body)
-        XCTAssertEqual(request.body?.name, "John")
-        XCTAssertEqual(request.body?.email, "john@test.com")
-        XCTAssertEqual(request.method, .post)
+        #expect(request.body != nil)
+        #expect(request.body?.name == "John")
+        #expect(request.body?.email == "john@test.com")
+        #expect(request.method == .post)
     }
 
-    // MARK: - Request With Query
-
-    func testRequestWithQuery() throws {
+    @Test("Request with query encodes query items")
+    func requestWithQuery() throws {
         struct SearchUsers: Request {
             struct Query: Encodable {
                 let name: String
@@ -56,17 +57,145 @@ final class NetworkKitTests: XCTestCase {
         }
 
         let request = SearchUsers(query: .init(name: "John", limit: 10))
-        XCTAssertNotNil(request.query)
-        XCTAssertEqual(request.query?.name, "John")
-        XCTAssertEqual(request.query?.limit, 10)
+        #expect(request.query != nil)
+        #expect(request.query?.name == "John")
+        #expect(request.query?.limit == 10)
 
         let queryItems = try request.query?.asQueryItems()
-        XCTAssertEqual(queryItems?.count, 2)
+        #expect(queryItems?.count == 2)
+    }
+}
+
+// MARK: - Session Provider Tests
+
+@Suite("SessionProvider Tests")
+struct SessionProviderTests {
+
+    @Test("DefaultSession has correct identifier")
+    func defaultSessionProvider() {
+        let session = DefaultSession.shared
+
+        #expect(session.identifier == "com.networkkit.default")
+
+        let config = session.makeConfiguration()
+        #expect(config.identifier == nil)
     }
 
-    // MARK: - Execute
+    @Test("BackgroundSession has correct identifier and configuration")
+    func backgroundSessionProvider() {
+        let session = BackgroundSession(identifier: "com.app.upload")
 
-    func testExecuteUsesSharedClient() async {
+        #expect(session.identifier == "com.app.upload")
+
+        let config = session.makeConfiguration()
+        #expect(config.identifier == "com.app.upload")
+    }
+
+    @Test("EphemeralSession creates valid configuration")
+    func ephemeralSessionProvider() {
+        let session = EphemeralSession.shared
+
+        #expect(session.identifier == "com.networkkit.ephemeral")
+
+        // Verify configuration is created successfully
+        _ = session.makeConfiguration()
+    }
+
+    @Test("Request uses DefaultSession by default")
+    func requestUsesDefaultSession() {
+        struct SimpleRequest: Request {
+            typealias Response = String
+            var path: String { "/test" }
+            var method: HTTPMethod { .get }
+        }
+
+        let request = SimpleRequest()
+        #expect(request.session.identifier == "com.networkkit.default")
+    }
+
+    @Test("Request can use BackgroundSession")
+    func requestUsesBackgroundSession() {
+        struct UploadRequest: Request {
+            typealias Response = String
+            typealias Session = BackgroundSession
+
+            var path: String { "/upload" }
+            var method: HTTPMethod { .post }
+            var session: BackgroundSession { BackgroundSession(identifier: "com.app.upload") }
+        }
+
+        let request = UploadRequest()
+        #expect(request.session.identifier == "com.app.upload")
+    }
+
+    @Test("Request can use EphemeralSession")
+    func requestUsesEphemeralSession() {
+        struct PrivateRequest: Request {
+            typealias Response = String
+            typealias Session = EphemeralSession
+
+            var path: String { "/private" }
+            var method: HTTPMethod { .get }
+            var session: EphemeralSession { .shared }
+        }
+
+        let request = PrivateRequest()
+        #expect(request.session.identifier == "com.networkkit.ephemeral")
+    }
+
+    @Test("Custom SessionProvider works correctly")
+    func customSessionProvider() {
+        struct LowPrioritySession: SessionProvider {
+            var identifier: String { "com.app.low-priority" }
+
+            func makeConfiguration() -> URLSessionConfiguration {
+                let config = URLSessionConfiguration.default
+                config.allowsCellularAccess = false
+                config.networkServiceType = .background
+                return config
+            }
+        }
+
+        struct SyncRequest: Request {
+            typealias Response = String
+            typealias Session = LowPrioritySession
+
+            var path: String { "/sync" }
+            var method: HTTPMethod { .post }
+            var session: LowPrioritySession { LowPrioritySession() }
+        }
+
+        let request = SyncRequest()
+        #expect(request.session.identifier == "com.app.low-priority")
+
+        let config = request.session.makeConfiguration()
+        #expect(config.allowsCellularAccess == false)
+        #expect(config.networkServiceType == .background)
+    }
+
+    @Test("SessionProvider is Hashable")
+    func sessionProviderHashable() {
+        let session1 = BackgroundSession(identifier: "com.app.upload")
+        let session2 = BackgroundSession(identifier: "com.app.upload")
+        let session3 = BackgroundSession(identifier: "com.app.download")
+
+        #expect(session1 == session2)
+        #expect(session1 != session3)
+
+        var set: Set<BackgroundSession> = []
+        set.insert(session1)
+        set.insert(session2)
+        #expect(set.count == 1)
+    }
+}
+
+// MARK: - Integration Tests
+
+@Suite("Integration Tests")
+struct IntegrationTests {
+
+    @Test("Execute uses shared client")
+    func executeUsesSharedClient() async throws {
         NetworkClient.shared = NetworkClient(
             configuration: .init(baseURL: "https://httpbin.org")
         )
@@ -81,11 +210,30 @@ final class NetworkKitTests: XCTestCase {
             let origin: String
         }
 
-        do {
-            let response = try await GetIP().execute()
-            XCTAssertFalse(response.origin.isEmpty)
-        } catch {
-            XCTFail("Request failed: \(error)")
+        let response = try await GetIP().execute()
+        #expect(!response.origin.isEmpty)
+    }
+
+    @Test("Execute with EphemeralSession works")
+    func executeWithEphemeralSession() async throws {
+        NetworkClient.shared = NetworkClient(
+            configuration: .init(baseURL: "https://httpbin.org")
+        )
+
+        struct EphemeralRequest: Request {
+            typealias Response = IPResponse
+            typealias Session = EphemeralSession
+
+            var path: String { "/ip" }
+            var method: HTTPMethod { .get }
+            var session: EphemeralSession { .shared }
         }
+
+        struct IPResponse: Decodable {
+            let origin: String
+        }
+
+        let response = try await EphemeralRequest().execute()
+        #expect(!response.origin.isEmpty)
     }
 }

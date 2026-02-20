@@ -16,12 +16,14 @@ public protocol Request: Sendable {
     associatedtype Response: Decodable & Sendable
     associatedtype Body: Encodable & Sendable = EmptyBody
     associatedtype Query: Encodable & Sendable = EmptyQuery
+    associatedtype Session: SessionProvider = DefaultSession
 
     var body: Body? { get }
     var query: Query? { get }
     var path: String { get }
     var method: HTTPMethod { get }
     var headers: [String: String]? { get }
+    var session: Session { get }
 }
 
 // MARK: - Default Implementations
@@ -34,6 +36,10 @@ public extension Request {
     func execute() async throws -> Response {
         try await NetworkClient.shared.execute(self)
     }
+}
+
+public extension Request where Session == DefaultSession {
+    var session: DefaultSession { .shared }
 }
 
 // MARK: - Query Items Encoding

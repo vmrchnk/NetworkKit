@@ -7,3 +7,4 @@ public enum HTTPMethod: String {
     case delete = "DELETE"
     case patch = "PATCH"
 }
+

@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D53964A42F48F98200489546 /* NetworkKit in Frameworks */ = {isa = PBXBuildFile; productRef = D59938CF2F3B22000081300B /* NetworkKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		D59938BB2F3B21760081300B /* Example.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Example.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,7 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D59938D02F3B22000081300B /* NetworkKit in Frameworks */,
+				D53964A42F48F98200489546 /* NetworkKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -18,7 +18,17 @@ struct ExampleApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TabView {
+                ContentView()
+                    .tabItem {
+                        Label("Weather", systemImage: "cloud.sun")
+                    }
+
+                DownloadDemoView()
+                    .tabItem {
+                        Label("Download", systemImage: "arrow.down.circle")
+                    }
+            }
         }
     }
 }

@@ -97,7 +97,6 @@
 			mainGroup = D59938B22F3B21760081300B;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D59938CE2F3B22000081300B /* XCLocalSwiftPackageReference "NetworkKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D59938BC2F3B21760081300B /* Products */;
@@ -337,13 +336,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCLocalSwiftPackageReference section */
-		D59938CE2F3B22000081300B /* XCLocalSwiftPackageReference "NetworkKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ..;
-		};
-/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		D59938CF2F3B22000081300B /* NetworkKit */ = {

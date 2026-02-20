@@ -214,6 +214,45 @@ struct SessionProviderTests {
     }
 }
 
+// MARK: - Progress Tests
+
+@Suite("RequestProgress Tests")
+struct RequestProgressTests {
+
+    @Test("RequestProgress holds progress value")
+    func progressHoldsValue() {
+        let progress: RequestProgress<String> = .progress(0.5)
+
+        if case .progress(let value) = progress {
+            #expect(value == 0.5)
+        } else {
+            Issue.record("Expected .progress case")
+        }
+    }
+
+    @Test("RequestProgress holds completed value")
+    func progressHoldsCompleted() {
+        let progress: RequestProgress<String> = .completed("result")
+
+        if case .completed(let value) = progress {
+            #expect(value == "result")
+        } else {
+            Issue.record("Expected .completed case")
+        }
+    }
+
+    @Test("RequestProgress is Sendable")
+    func progressIsSendable() async {
+        let progress: RequestProgress<Int> = .progress(0.75)
+
+        await Task {
+            if case .progress(let value) = progress {
+                #expect(value == 0.75)
+            }
+        }.value
+    }
+}
+
 // MARK: - Integration Tests
 
 @Suite("Integration Tests")
@@ -261,4 +300,85 @@ struct IntegrationTests {
         let response = try await EphemeralRequest().execute()
         #expect(!response.origin.isEmpty)
     }
+
+    @Test("Download with progress tracks progress and saves file")
+    func downloadWithProgress() async throws {
+        NetworkClient.shared = NetworkClient(
+            configuration: .init(baseURL: "https://httpbin.org")
+        )
+
+        struct DownloadRequest: Request {
+            typealias Response = Data
+            var path: String { "/bytes/1024" }
+            var method: HTTPMethod { .get }
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let destination = tempDir.appendingPathComponent("test_download_\(UUID().uuidString).bin")
+
+        defer {
+            try? FileManager.default.removeItem(at: destination)
+        }
+
+        var progressValues: [Double] = []
+        var completedURL: URL?
+
+        for try await event in DownloadRequest().download(to: destination) {
+            switch event {
+            case .progress(let value):
+                progressValues.append(value)
+            case .completed(let url):
+                completedURL = url
+            }
+        }
+
+        #expect(completedURL == destination)
+        #expect(FileManager.default.fileExists(atPath: destination.path))
+
+        let fileData = try Data(contentsOf: destination)
+        #expect(fileData.count == 1024)
+    }
+
+    @Test("Upload with progress tracks progress and returns response")
+    func uploadWithProgress() async throws {
+        NetworkClient.shared = NetworkClient(
+            configuration: .init(baseURL: "https://httpbin.org")
+        )
+
+        struct UploadResponse: Decodable {
+            let data: String
+        }
+
+        struct UploadRequest: Request {
+            typealias Response = UploadResponse
+            var path: String { "/post" }
+            var method: HTTPMethod { .post }
+        }
+
+        // Create temp file to upload
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileURL = tempDir.appendingPathComponent("test_upload_\(UUID().uuidString).txt")
+        let testData = Data(repeating: 65, count: 1024) // 1KB of 'A's
+        try testData.write(to: fileURL)
+
+        defer {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+
+        var progressValues: [Double] = []
+        var response: UploadResponse?
+
+        for try await event in UploadRequest().upload(from: fileURL) {
+            switch event {
+            case .progress(let value):
+                progressValues.append(value)
+            case .completed(let result):
+                response = result
+            }
+        }
+
+        #expect(response != nil)
+        #expect(!progressValues.isEmpty)
+    }
+
 }

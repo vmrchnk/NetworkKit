@@ -24,6 +24,7 @@ public protocol Request: Sendable {
     var method: HTTPMethod { get }
     var headers: [String: String]? { get }
     var session: Session { get }
+    var baseURL: String? { get }
 }
 
 // MARK: - Default Implementations
@@ -32,6 +33,7 @@ public extension Request {
     var body: Body? { nil }
     var query: Query? { nil }
     var headers: [String: String]? { nil }
+    var baseURL: String? { nil }
 
     func execute() async throws -> Response {
         try await NetworkClient.shared.execute(self)

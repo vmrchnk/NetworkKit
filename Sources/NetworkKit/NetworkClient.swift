@@ -96,7 +96,8 @@ public final class NetworkClient: Sendable {
     // MARK: - Private Helpers
 
     private func buildURLRequest<R: Request>(for request: R) throws -> URLRequest {
-        var components = URLComponents(string: configuration.baseURL + request.path)
+        let baseURL = request.baseURL ?? configuration.baseURL
+        var components = URLComponents(string: baseURL + request.path)
 
         if let query = request.query, !(query is EmptyQuery) {
             do {

@@ -64,6 +64,31 @@ struct RequestTests {
         let queryItems = try request.query?.asQueryItems()
         #expect(queryItems?.count == 2)
     }
+
+    @Test("Request uses nil baseURL by default")
+    func requestUsesNilBaseURLByDefault() {
+        struct SimpleRequest: Request {
+            typealias Response = String
+            var path: String { "/test" }
+            var method: HTTPMethod { .get }
+        }
+
+        let request = SimpleRequest()
+        #expect(request.baseURL == nil)
+    }
+
+    @Test("Request can specify custom baseURL")
+    func requestWithCustomBaseURL() {
+        struct ExternalAPIRequest: Request {
+            typealias Response = String
+            var path: String { "/data" }
+            var method: HTTPMethod { .get }
+            var baseURL: String? { "https://external-api.com" }
+        }
+
+        let request = ExternalAPIRequest()
+        #expect(request.baseURL == "https://external-api.com")
+    }
 }
 
 // MARK: - Session Provider Tests

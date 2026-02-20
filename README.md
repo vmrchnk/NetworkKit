@@ -99,6 +99,132 @@ let users = try await SearchUsers(query: .init(name: "John", limit: 10)).execute
 let post = try await CreatePost(body: .init(title: "Hello", content: "World")).execute()
 ```
 
+### 4. Download with Progress
+
+```swift
+struct DownloadFileRequest: Request {
+    typealias Response = Data
+
+    let fileURL: String
+    var baseURL: String? { "" }
+    var path: String { fileURL }
+    var method: HTTPMethod { .get }
+}
+
+let request = DownloadFileRequest(fileURL: "https://example.com/file.mp4")
+let destination = FileManager.default.temporaryDirectory
+    .appendingPathComponent("video.mp4")
+
+for try await event in request.download(to: destination) {
+    switch event {
+    case .progress(let progress):
+        print("Downloaded: \(Int(progress * 100))%")
+    case .completed(let url):
+        print("Saved to: \(url)")
+    }
+}
+```
+
+### 5. Upload with Progress
+
+```swift
+struct UploadFileRequest: Request {
+    typealias Response = UploadResponse
+
+    var path: String { "/upload" }
+    var method: HTTPMethod { .post }
+}
+
+let fileURL = URL(fileURLWithPath: "/path/to/file.pdf")
+
+for try await event in UploadFileRequest().upload(from: fileURL) {
+    switch event {
+    case .progress(let progress):
+        print("Uploaded: \(Int(progress * 100))%")
+    case .completed(let response):
+        print("Upload complete: \(response)")
+    }
+}
+```
+
+## Session Providers
+
+NetworkKit supports different URLSession configurations for various use cases:
+
+### DefaultSession (default)
+
+Standard session for most API calls:
+
+```swift
+struct GetUser: Request {
+    // Uses DefaultSession automatically
+    typealias Response = User
+    var path: String { "/users/1" }
+    var method: HTTPMethod { .get }
+}
+```
+
+### EphemeralSession
+
+For private/sensitive requests (no caching, no cookies stored):
+
+```swift
+struct PrivateRequest: Request {
+    typealias Response = SensitiveData
+    typealias Session = EphemeralSession
+
+    var path: String { "/private" }
+    var method: HTTPMethod { .get }
+    var session: EphemeralSession { .shared }
+}
+```
+
+### BackgroundSession
+
+For uploads/downloads that continue when app is backgrounded:
+
+```swift
+struct LargeUpload: Request {
+    typealias Response = UploadResult
+    typealias Session = BackgroundSession
+
+    var path: String { "/upload" }
+    var method: HTTPMethod { .post }
+    var session: BackgroundSession {
+        BackgroundSession(identifier: "com.myapp.upload")
+    }
+}
+```
+
+### Custom SessionProvider
+
+```swift
+struct LowPrioritySession: SessionProvider {
+    var identifier: String { "com.myapp.low-priority" }
+
+    func makeConfiguration() -> URLSessionConfiguration {
+        let config = URLSessionConfiguration.default
+        config.allowsCellularAccess = false
+        config.networkServiceType = .background
+        return config
+    }
+}
+```
+
+## Custom Base URL
+
+Override the base URL for specific requests (useful for multiple API endpoints):
+
+```swift
+struct ExternalAPIRequest: Request {
+    typealias Response = ExternalData
+
+    var path: String { "/data" }
+    var method: HTTPMethod { .get }
+    var baseURL: String? { "https://external-api.com" }
+}
+```
+
 ## Configuration
 
 ### NetworkClientConfiguration
@@ -106,10 +232,7 @@ let post = try await CreatePost(body: .init(title: "Hello", content: "World")).e
 ```swift
 NetworkClientConfiguration(
     baseURL: "https://api.example.com",
-    timeoutInterval: 30,           // Request timeout (seconds)
-    resourceTimeout: 300,          // Resource timeout (seconds)
-    waitsForConnectivity: true,    // Wait for network
-    defaultHeaders: [:]            // Headers for all requests
+    defaultHeaders: ["Authorization": "Bearer \(token)"]
 )
 ```
 

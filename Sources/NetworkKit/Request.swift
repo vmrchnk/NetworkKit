@@ -38,6 +38,14 @@ public extension Request {
     func execute() async throws -> Response {
         try await NetworkClient.shared.execute(self)
     }
+
+    func download(to destination: URL) -> AsyncThrowingStream<RequestProgress<URL>, Error> {
+        NetworkClient.shared.download(self, to: destination)
+    }
+
+    func upload(from fileURL: URL) -> AsyncThrowingStream<RequestProgress<Response>, Error> {
+        NetworkClient.shared.upload(self, from: fileURL)
+    }
 }
 
 public extension Request where Session == DefaultSession {

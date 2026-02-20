@@ -4,22 +4,13 @@ import Foundation
 
 public struct NetworkClientConfiguration: Sendable {
     public let baseURL: String
-    public let timeoutInterval: TimeInterval
-    public let resourceTimeout: TimeInterval
-    public let waitsForConnectivity: Bool
     public let defaultHeaders: [String: String]
 
     public init(
         baseURL: String,
-        timeoutInterval: TimeInterval = 30,
-        resourceTimeout: TimeInterval = 300,
-        waitsForConnectivity: Bool = true,
         defaultHeaders: [String: String] = [:]
     ) {
         self.baseURL = baseURL
-        self.timeoutInterval = timeoutInterval
-        self.resourceTimeout = resourceTimeout
-        self.waitsForConnectivity = waitsForConnectivity
         self.defaultHeaders = defaultHeaders
     }
 }
@@ -29,17 +20,12 @@ public struct NetworkClientConfiguration: Sendable {
 private actor SessionCache {
     private var sessions: [String: URLSession] = [:]
 
-    func session(for provider: some SessionProvider, configuration: NetworkClientConfiguration) -> URLSession {
+    func session(for provider: some SessionProvider) -> URLSession {
         if let existing = sessions[provider.identifier] {
             return existing
         }
 
-        let sessionConfig = provider.makeConfiguration()
-        sessionConfig.timeoutIntervalForRequest = configuration.timeoutInterval
-        sessionConfig.timeoutIntervalForResource = configuration.resourceTimeout
-        sessionConfig.waitsForConnectivity = configuration.waitsForConnectivity
-
-        let session = URLSession(configuration: sessionConfig)
+        let session = URLSession(configuration: provider.makeConfiguration())
         sessions[provider.identifier] = session
         return session
     }
@@ -89,7 +75,7 @@ public final class NetworkClient: Sendable {
 
     public func execute<R: Request>(_ request: R) async throws -> R.Response {
         let urlRequest = try buildURLRequest(for: request)
-        let session = await sessionCache.session(for: request.session, configuration: configuration)
+        let session = await sessionCache.session(for: request.session)
 
         logger.logRequest(urlRequest)
 

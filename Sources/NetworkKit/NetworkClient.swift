@@ -15,6 +15,62 @@ public struct NetworkClientConfiguration: Sendable {
     }
 }
 
+// MARK: - Progress Delegate
+
+private final class ProgressDelegate: NSObject, URLSessionTaskDelegate, Sendable {
+    private let onProgress: @Sendable (Double) -> Void
+
+    init(onProgress: @escaping @Sendable (Double) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    // Upload progress
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didSendBodyData bytesSent: Int64,
+        totalBytesSent: Int64,
+        totalBytesExpectedToSend: Int64
+    ) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        let progress = Double(totalBytesSent) / Double(totalBytesExpectedToSend)
+        onProgress(progress)
+    }
+}
+
+private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, Sendable {
+    private let onProgress: @Sendable (Double) -> Void
+    private let onComplete: @Sendable (URL) -> Void
+
+    init(
+        onProgress: @escaping @Sendable (Double) -> Void,
+        onComplete: @escaping @Sendable (URL) -> Void
+    ) {
+        self.onProgress = onProgress
+        self.onComplete = onComplete
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        onProgress(progress)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        onComplete(location)
+    }
+}
+
 // MARK: - Session Cache
 
 private actor SessionCache {
@@ -91,6 +147,82 @@ public final class NetworkClient: Sendable {
         try validateResponse(response)
 
         return try decodeResponse(data)
+    }
+
+    // MARK: - Download with Progress
+
+    public func download<R: Request>(
+        _ request: R,
+        to destination: URL
+    ) -> AsyncThrowingStream<RequestProgress<URL>, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let urlRequest = try buildURLRequest(for: request)
+                    let session = await sessionCache.session(for: request.session)
+
+                    logger.logRequest(urlRequest)
+
+                    let delegate = ProgressDelegate { progress in
+                        continuation.yield(.progress(progress))
+                    }
+
+                    let (tempURL, response) = try await session.download(for: urlRequest, delegate: delegate)
+
+                    try validateResponse(response)
+
+                    // Move from temp location to destination
+                    let fileManager = FileManager.default
+                    if fileManager.fileExists(atPath: destination.path) {
+                        try fileManager.removeItem(at: destination)
+                    }
+                    try fileManager.moveItem(at: tempURL, to: destination)
+
+                    logger.logResponse(response, data: nil, error: nil)
+
+                    continuation.yield(.completed(destination))
+                    continuation.finish()
+                } catch {
+                    logger.logResponse(nil, data: nil, error: error)
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    // MARK: - Upload with Progress
+
+    public func upload<R: Request>(
+        _ request: R,
+        from fileURL: URL
+    ) -> AsyncThrowingStream<RequestProgress<R.Response>, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let urlRequest = try buildURLRequest(for: request)
+                    let session = await sessionCache.session(for: request.session)
+
+                    logger.logRequest(urlRequest)
+
+                    let delegate = ProgressDelegate { progress in
+                        continuation.yield(.progress(progress))
+                    }
+
+                    let (data, response) = try await session.upload(for: urlRequest, fromFile: fileURL, delegate: delegate)
+
+                    logger.logResponse(response, data: data, error: nil)
+
+                    try validateResponse(response)
+
+                    let decoded: R.Response = try decodeResponse(data)
+                    continuation.yield(.completed(decoded))
+                    continuation.finish()
+                } catch {
+                    logger.logResponse(nil, data: nil, error: error)
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
 
     // MARK: - Private Helpers

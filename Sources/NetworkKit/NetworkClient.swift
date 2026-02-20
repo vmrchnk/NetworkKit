@@ -163,20 +163,37 @@ public final class NetworkClient: Sendable {
 
                     logger.logRequest(urlRequest)
 
-                    let delegate = ProgressDelegate { progress in
-                        continuation.yield(.progress(progress))
-                    }
-
-                    let (tempURL, response) = try await session.download(for: urlRequest, delegate: delegate)
+                    let (asyncBytes, response) = try await session.bytes(for: urlRequest)
 
                     try validateResponse(response)
 
-                    // Move from temp location to destination
+                    let expectedLength = response.expectedContentLength
+                    var receivedLength: Int64 = 0
+                    var data = Data()
+
+                    if expectedLength > 0 {
+                        data.reserveCapacity(Int(expectedLength))
+                    }
+
+                    // Update progress every ~1% or at least every 64KB
+                    let updateInterval = max(expectedLength / 100, 1024)
+
+                    for try await byte in asyncBytes {
+                        data.append(byte)
+                        receivedLength += 1
+
+                        if expectedLength > 0 && receivedLength % updateInterval == 0 {
+                            let progress = Double(receivedLength) / Double(expectedLength)
+                            continuation.yield(.progress(progress))
+                        }
+                    }
+
+                    // Write to destination
                     let fileManager = FileManager.default
                     if fileManager.fileExists(atPath: destination.path) {
                         try fileManager.removeItem(at: destination)
                     }
-                    try fileManager.moveItem(at: tempURL, to: destination)
+                    try data.write(to: destination)
 
                     logger.logResponse(response, data: nil, error: nil)
 
